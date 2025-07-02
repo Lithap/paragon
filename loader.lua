@@ -1,32 +1,56 @@
+-- Paragon/loader.lua  •  one-file cloud bootstrap
+-- ─────────────────────────────────────────────────────────
+-- ① waits for game load
+-- ② RemoteRequire() pulls sub-modules from GitHub raw CDN & caches them
+-- ③ loads + autosaves config
+-- ④ runs key system (fancy prompt)
+-- ⑤ shows demo tab so you see the menu pop up
 
+------------------------------------------------------------------
+-- 🕒 wait for game
+------------------------------------------------------------------
 if not game:IsLoaded() then game.Loaded:Wait() end
 
-------------------------------------------------------------------------
--- 🔧 CONFIG HANDLING ---------------------------------------------------
-------------------------------------------------------------------------
-local ConfigManager = loadfile("Paragon/utils/configmanager.lua")
-local DefaultConfig = loadfile("Paragon/config.lua")()
+------------------------------------------------------------------
+-- 🌐 RemoteRequire  (GitHub fetch + in-memory cache)
+------------------------------------------------------------------
+local BASE   = "https://raw.githubusercontent.com/Lithap/paragon/main/"
+local cache  = {}
+
+local function RemoteRequire(path)
+    if cache[path] then return cache[path] end
+    local src = game:HttpGet(BASE .. path, true)
+    local chunk = loadstring(src, "@"..path)
+    local result = chunk()
+    cache[path] = result
+    return result
+end
+
+------------------------------------------------------------------
+-- ⚙  Config (load + autosave)
+------------------------------------------------------------------
+local ConfigManager = RemoteRequire("utils/configmanager.lua")
+local DefaultConfig = RemoteRequire("config.lua")
 local Config        = ConfigManager.Load(DefaultConfig)
 ConfigManager.BindAutoSave(Config)
 
-------------------------------------------------------------------------
--- 🔐 KEY SYSTEM -------------------------------------------------------
-------------------------------------------------------------------------
-local KeySystem = loadfile("Paragon/ui/keysystem.lua")()
-KeySystem:Init(function()  -- called once key is valid
+------------------------------------------------------------------
+-- 🔐 Key system  (fancy prompt included)
+------------------------------------------------------------------
+local KeySystem = RemoteRequire("ui/keysystem.lua")()
+KeySystem:Init(function()
 
-    --------------------------------------------------------------------
-    -- 🖥️  DEMO MENU ----------------------------------------------------
-    --------------------------------------------------------------------
-    local Menu = loadfile("Paragon/ui/menu.lua")(Config)
+    --------------------------------------------------------------
+    -- 🖥️  Demo menu so you can see something instantly
+    --------------------------------------------------------------
+    local MenuFactory = RemoteRequire("ui/menu.lua")
+    local Menu = MenuFactory(Config)
 
-    -- build a minimal tab so something appears immediately
     local Demo = Menu:Tab("Demo")
-    Demo:Toggle("Example Toggle","ESP.Example")
-    Demo:Slider("Example Slider","ESP.ExampleValue",0,100)
-    Demo:Keybind("Example Key","ESP.ExampleKey")
+    Demo:Toggle ("Example Toggle", "ESP.Example")
+    Demo:Slider ("Example Slider", "ESP.ExampleValue", 0, 100)
+    Demo:Keybind("Example Key",    "ESP.ExampleKey")
 
-    Menu:Init()  -- not strictly required yet but reserved for future
-
-    print("[Paragon] loader finished – UI should now be visible")
+    Menu:Init()
+    print("[Paragon] fully loaded — key prompt + menu should be visible")
 end)
